@@ -1,0 +1,26 @@
+# Mac
+.DS_Store
+
+# Backup files
+*~*
+
+# Compiled Object files, Static and Dynamic libs (Shared Objects)
+*.o
+*.a
+*.so
+
+# Folders
+_obj
+_test
+uploads/
+
+# Editor files
+.idea/
+*.iml
+*.swp
+.vscode/
+
+# vi backups
+*.bak
+# common backups
+*~
