@@ -21,7 +21,12 @@ func (vh *VideoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	videos, err := util.GetAllVideosFromDB(vh.MongoCollection, page, pageSize)
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+	    scheme = "https"
+	}
+
+	videos, err := util.GetAllVideosFromDB(vh.MongoCollection, page, pageSize, scheme + "://" + r.Host)
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return

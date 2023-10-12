@@ -41,7 +41,7 @@ func InsertVideoToDB(collection *mongo.Collection, video model.Video) error {
 	return nil
 }
 
-func GetAllVideosFromDB(collection *mongo.Collection, page int, pageSize int) ([]model.Video, error) {
+func GetAllVideosFromDB(collection *mongo.Collection, page int, pageSize int, serverUrl string) ([]model.Video, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -59,7 +59,7 @@ func GetAllVideosFromDB(collection *mongo.Collection, page int, pageSize int) ([
 	for cursor.Next(ctx) {
 		var video model.Video
 		cursor.Decode(&video)
-		video.VideoUrl = config.Config.ServerURL + "/" + video.VideoUrl
+		video.VideoUrl = serverUrl + "/" + config.Config.VideosDir + "/" + video.VideoUrl
 		videos = append(videos, video)
 	}
 
