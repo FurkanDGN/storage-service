@@ -11,6 +11,7 @@ import (
 	"os"
 	"go.mongodb.org/mongo-driver/mongo"
 	"log"
+	"strings"
 )
 
 type UploadHandler struct {
@@ -33,11 +34,8 @@ func (u *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the file extension
-	fileExtension := filepath.Ext(header.Filename)
-
-	// Create target path
-	targetPath := fmt.Sprintf("%s/%s/%s%s", config.Config.VideosDir, fileExtension, id, fileExtension)
+	fileExtension := strings.TrimPrefix(filepath.Ext(header.Filename), ".")
+	targetPath := fmt.Sprintf("%s/%s/%s%s", config.Config.VideosDir, fileExtension, id, filepath.Ext(header.Filename))
 	err = os.MkdirAll(filepath.Dir(targetPath), 0755)
 	if err != nil {
 		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
@@ -70,6 +68,11 @@ func (u *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+	    scheme = "https"
+	}
+
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("Upload successful. Video path: %s", targetPath)))
+	w.Write([]byte(fmt.Sprintf("Upload successful. Video path: %s", scheme + "://" + r.Host + "/" + targetPath)))
 }

@@ -18,7 +18,8 @@ func main() {
    }
    log.Println("Connected to MongoDB")
 
-   util.CreateDir("uploads")
+   videosDir := config.Config.VideosDir;
+   util.CreateDir(videosDir)
 
    uploadHandler := &handler.UploadHandler{
       MongoCollection: mongoCollection,
@@ -28,16 +29,16 @@ func main() {
    }
 
    http.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
-      enableCors(&w, "POST")
+      enableCors(&w, "PUT")
       uploadHandler.ServeHTTP(w, r)
    })
    http.HandleFunc("/videos", func(w http.ResponseWriter, r *http.Request) {
       enableCors(&w, "GET")
       videoHandler.ServeHTTP(w, r)
    })
-   http.HandleFunc("/uploads/", func(w http.ResponseWriter, r *http.Request) {
+   http.HandleFunc("/" + videosDir + "/", func(w http.ResponseWriter, r *http.Request) {
       enableCors(&w, "GET")
-      http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads/"))).ServeHTTP(w, r)
+      http.StripPrefix("/" + videosDir + "/", http.FileServer(http.Dir("./" + videosDir + "/"))).ServeHTTP(w, r)
    })
    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
       http.NotFound(w, r)
