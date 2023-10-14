@@ -10,13 +10,18 @@ import (
 	"time"
 )
 
-func ConnectToMongoDB() (*mongo.Collection, error) {
+// MongoDB wraps mongo client and collection for ease of use
+type MongoDB struct {
+	client     *mongo.Client
+	collection *mongo.Collection
+}
+
+func Connect() (*MongoDB, error) {
 	clientOptions := options.Client().ApplyURI(config.Config.MongoURL)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	client, err := mongo.Connect(ctx, clientOptions)
-
 	if err != nil {
 		return nil, err
 	}
@@ -27,21 +32,18 @@ func ConnectToMongoDB() (*mongo.Collection, error) {
 	}
 
 	collection := client.Database(config.Config.MongoDbName).Collection(config.Config.MongoVideosCollection)
-	return collection, nil
+	return &MongoDB{client: client, collection: collection}, nil
 }
 
-func InsertVideoToDB(collection *mongo.Collection, video model.Video) error {
+func (db *MongoDB) InsertVideo(video model.Video) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := collection.InsertOne(ctx, video)
-	if err != nil {
-		return err
-	}
-	return nil
+	_, err := db.collection.InsertOne(ctx, video)
+	return err
 }
 
-func GetAllVideosFromDB(collection *mongo.Collection, page int, pageSize int, serverUrl string) ([]model.Video, error) {
+func (db *MongoDB) GetAllVideos(page int, pageSize int, serverUrl string) ([]model.Video, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -49,7 +51,7 @@ func GetAllVideosFromDB(collection *mongo.Collection, page int, pageSize int, se
 	limit := int64(pageSize)
 	opts := options.Find().SetSkip(int64(skip)).SetLimit(limit)
 
-	cursor, err := collection.Find(ctx, bson.M{}, opts)
+	cursor, err := db.collection.Find(ctx, bson.M{}, opts)
 	if err != nil {
 		return nil, err
 	}

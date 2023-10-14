@@ -4,12 +4,11 @@ import (
 	"videohub/util"
 	"encoding/json"
 	"net/http"
-	"go.mongodb.org/mongo-driver/mongo"
 	"strconv"
 )
 
 type VideoHandler struct {
-	MongoCollection *mongo.Collection
+	MongoDb *util.MongoDB
 }
 
 func (vh *VideoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -22,17 +21,17 @@ func (vh *VideoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	scheme := "http"
-	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+	if r.TLS != nil {
 		 scheme = "https"
 	}
 
-	videos, err := util.GetAllVideosFromDB(vh.MongoCollection, page, pageSize, scheme + "://" + r.Host)
+	videos, err := vh.MongoDb.GetAllVideos(page, pageSize, scheme + "://" + r.Host)
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	jsonResponse, err := json.Marshal(videos)
+	jsonResponse, err := json.Marshal(map[string]interface{}{"videos": videos})
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return

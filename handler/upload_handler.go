@@ -9,13 +9,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"strings"
 )
 
 type UploadHandler struct {
-	MongoCollection *mongo.Collection
+	MongoDb *util.MongoDB
 }
 
 func (u *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +60,7 @@ func (u *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		VideoUrl: fmt.Sprintf("%s/%s.%s", fileExtension, id, fileExtension),
 	}
 
-	err = util.InsertVideoToDB(u.MongoCollection, video)
+	err = u.MongoDb.InsertVideo(video)
 	if err != nil {
 		log.Printf("Failed to insert video to MongoDB: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
