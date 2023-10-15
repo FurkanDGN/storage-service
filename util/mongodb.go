@@ -10,10 +10,11 @@ import (
 	"time"
 )
 
-// MongoDB wraps mongo client and collection for ease of use
+
 type MongoDB struct {
 	client     *mongo.Client
-	collection *mongo.Collection
+	videosCollection *mongo.Collection
+	ftpServersCollection *mongo.Collection
 }
 
 func Connect() (*MongoDB, error) {
@@ -31,15 +32,16 @@ func Connect() (*MongoDB, error) {
 		return nil, err
 	}
 
-	collection := client.Database(config.Config.MongoDbName).Collection(config.Config.MongoVideosCollection)
-	return &MongoDB{client: client, collection: collection}, nil
+	videosCollection := client.Database(config.Config.MongoDbName).Collection(config.Config.MongoVideosCollection)
+	ftpServersCollection := client.Database(config.Config.MongoDbName).Collection(config.Config.MongoFtpServersCollection)
+	return &MongoDB{client: client, videosCollection: videosCollection, ftpServersCollection: ftpServersCollection}, nil
 }
 
 func (db *MongoDB) InsertVideo(video model.Video) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := db.collection.InsertOne(ctx, video)
+	_, err := db.videosCollection.InsertOne(ctx, video)
 	return err
 }
 
@@ -51,7 +53,7 @@ func (db *MongoDB) GetAllVideos(page int, pageSize int, serverUrl string) ([]mod
 	limit := int64(pageSize)
 	opts := options.Find().SetSkip(int64(skip)).SetLimit(limit)
 
-	cursor, err := db.collection.Find(ctx, bson.M{}, opts)
+	cursor, err := db.videosCollection.Find(ctx, bson.M{}, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -70,4 +72,41 @@ func (db *MongoDB) GetAllVideos(page int, pageSize int, serverUrl string) ([]mod
 	}
 
 	return videos, nil
+}
+
+func (db *MongoDB) FetchAllFtpServers() ([]model.FtpServer, error) {
+	var servers []model.FtpServer
+	cursor, err := db.ftpServersCollection.Find(context.TODO(), bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.TODO())
+
+	for cursor.Next(context.TODO()) {
+		var server model.FtpServer
+		err := cursor.Decode(&server)
+		if err != nil {
+			return nil, err
+		}
+		servers = append(servers, server)
+	}
+	return servers, nil
+}
+
+func (db *MongoDB) FetchVideoByID(videoID string) (*model.Video, error) {
+	var video model.Video
+	err := db.videosCollection.FindOne(context.TODO(), bson.M{"_id": videoID}).Decode(&video)
+	if err != nil {
+		return nil, err
+	}
+	return &video, nil
+}
+
+func (db *MongoDB) FetchFtpServerByID(serverID string) (*model.FtpServer, error) {
+    var server model.FtpServer
+    err := db.ftpServersCollection.FindOne(context.TODO(), bson.M{"_id": serverID}).Decode(&server)
+    if err != nil {
+        return nil, err
+    }
+    return &server, nil
 }

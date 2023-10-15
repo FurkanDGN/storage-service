@@ -8,7 +8,6 @@ import (
 	"io"
 	"fmt"
 	"net/http"
-	"os"
 	"log"
 	"strings"
 )
@@ -35,29 +34,24 @@ func (u *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	fileExtension := strings.TrimPrefix(filepath.Ext(header.Filename), ".")
 	targetPath := fmt.Sprintf("%s/%s/%s%s", config.Config.VideosDir, fileExtension, id, filepath.Ext(header.Filename))
-	err = os.MkdirAll(filepath.Dir(targetPath), 0755)
+
+	ftpServers, err := u.MongoDb.FetchAllFtpServers()
 	if err != nil {
-		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
+		log.Printf("Failed to fetch FTP servers: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	targetFile, err := os.Create(targetPath)
-	if err != nil {
-		http.Error(w, "Failed to create target file", http.StatusInternalServerError)
-		return
-	}
-	defer targetFile.Close()
-
-	_, err = io.Copy(targetFile, file)
-	if err != nil {
-		http.Error(w, "Failed to copy to target file", http.StatusInternalServerError)
-		return
+	var replicates []string
+	for _, server := range ftpServers {
+		replicates = append(replicates, server.ID)
 	}
 
 	video := model.Video{
-		ID:    id,
-		Title: title,
-		VideoUrl: fmt.Sprintf("%s/%s.%s", fileExtension, id, fileExtension),
+		ID:        id,
+		Title:     title,
+		VideoUrl:  fmt.Sprintf("%s/%s.%s", fileExtension, id, fileExtension),
+		Replicates: replicates,
 	}
 
 	err = u.MongoDb.InsertVideo(video)
@@ -67,11 +61,43 @@ func (u *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	u.UploadToFtpServers(file, targetPath)
+
 	scheme := "http"
 	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
-		 scheme = "https"
+		scheme = "https"
 	}
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(fmt.Sprintf("Upload successful. Video path: %s", scheme + "://" + r.Host + "/" + targetPath)))
+}
+
+func (u *UploadHandler) UploadToFtpServers(file io.ReadSeeker, ftpPath string) {
+	ftpServers, err := u.MongoDb.FetchAllFtpServers()
+	if err != nil {
+		log.Printf("Failed to fetch FTP servers: %v", err)
+		return
+	}
+
+	for _, server := range ftpServers {
+		conn, err := util.ConnectToFtp(server)
+		if err != nil {
+			log.Printf("Failed to connect to FTP server %s: %v", server.Address, err)
+			continue
+		}
+		defer conn.Quit()
+
+    directory := filepath.Dir(ftpPath)
+    err = util.EnsureFtpDirectories(conn, directory)
+    if err != nil {
+        log.Printf("Failed to create FTP directory %s on server %s: %v", directory, server.Address, err)
+        continue
+    }
+
+		file.Seek(0, 0)
+		err = conn.Stor(ftpPath, file)
+		if err != nil {
+			log.Printf("Failed to upload file to FTP server %s: %v", server.Address, err)
+		}
+	}
 }

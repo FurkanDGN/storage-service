@@ -9,6 +9,7 @@ type AppConfig struct {
 	MongoURL string
 	MongoDbName string
 	MongoVideosCollection string
+	MongoFtpServersCollection string
 	ServerURL string
 	VideosDir string
 }
@@ -21,6 +22,7 @@ func LoadConfig() *AppConfig {
 		mongoUrl, _ :=              os.LookupEnv("VIDEOHUB_MONGO_URL")
 		mongoDatabaseName, _ := 	  os.LookupEnv("VIDEOHUB_MONGO_DB_NAME")
 		mongoVideosCollection, _ := os.LookupEnv("VIDEOHUB_MONGO_VIDEOS_COLLECTION")
+		mongoFtpServersCollection, _ := os.LookupEnv("VIDEOHUB_MONGO_FTP_SERVERS_COLLECTION")
 		serverURL, _ :=             os.LookupEnv("VIDEOHUB_SERVER_URL")
 		videosDir, _ :=             os.LookupEnv("VIDEOHUB_VIDEOS_DIRNAME")
 
@@ -28,6 +30,7 @@ func LoadConfig() *AppConfig {
 			MongoURL:              mongoUrl,
 			MongoDbName:           mongoDatabaseName,
 			MongoVideosCollection: mongoVideosCollection,
+			MongoFtpServersCollection: mongoFtpServersCollection,
 			ServerURL:             serverURL,
 			VideosDir:             videosDir,
 		}

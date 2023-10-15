@@ -7,11 +7,11 @@ import (
 	"strconv"
 )
 
-type VideoHandler struct {
+type VideosHandler struct {
 	MongoDb *util.MongoDB
 }
 
-func (vh *VideoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (vh *VideosHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
 
