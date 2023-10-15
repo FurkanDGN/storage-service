@@ -8,8 +8,6 @@ import (
 	"strings"
 	"fmt"
 	"path/filepath"
-	"bytes"
-	"io/ioutil"
 )
 
 func ConnectToFtp(server model.FtpServer) (*ftp.ServerConn, error) {
@@ -31,59 +29,37 @@ func ConnectToFtp(server model.FtpServer) (*ftp.ServerConn, error) {
 	return conn, nil
 }
 
-func FetchVideoFromFtp(server model.FtpServer, videoPath string) (io.Reader, error) {
-	conn, err := ConnectToFtp(server)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Quit()
-
-	reader, err := conn.Retr(videoPath)
-	if err != nil {
-		return nil, err
-	}
-	return reader, nil
-}
-
-func FetchVideoFromFtpToBuffer(server model.FtpServer, videoPath string) (*bytes.Buffer, error) {
-	conn, err := ConnectToFtp(server)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Quit()
-
-	reader, err := conn.Retr(videoPath)
-	if err != nil {
-		return nil, err
-	}
-	defer reader.Close()
-
-	data, err := ioutil.ReadAll(reader)
-	if err != nil {
-		return nil, err
-	}
-
-	buffer := bytes.NewBuffer(data)
-	return buffer, nil
-}
-
-func EnsureFtpDirectories(conn *ftp.ServerConn, path string) error {
-    parts := strings.Split(path, "/")
-    currentPath := ""
-    
-    for _, part := range parts {
-        if part != "" {
-            currentPath = filepath.Join(currentPath, part)
-            _, err := conn.List(currentPath)
-            if err != nil {
-                err = conn.MakeDir(currentPath)
-                if err != nil {
-                    return fmt.Errorf("Failed to create FTP directory %s: %v", currentPath, err)
-                }
-            }
-        }
+func FetchVideoReaderAndConnFromFtp(server model.FtpServer, videoPath string) (*ftp.ServerConn, io.ReadCloser, error) {
+    conn, err := ConnectToFtp(server)
+    if err != nil {
+        return nil, nil, err
     }
-    return nil
+
+    reader, err := conn.Retr(videoPath)
+    if err != nil {
+        conn.Quit()
+        return nil, nil, err
+    }
+
+    return conn, reader, nil
+}
+
+func FetchPartialVideoFromFtpToReader(server model.FtpServer, videoPath string, start, end int64) (*ftp.ServerConn, io.Reader, error) {
+	conn, err := ConnectToFtp(server)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	reader, err := conn.RetrFrom(videoPath, uint64(start))
+	if err != nil {
+		conn.Quit()
+		return nil, nil, err
+	}
+
+	limitedReader := io.LimitReader(reader, end-start+1)
+
+	// Dikkat: reader ve conn, yüksek seviyede yönetmek için bu iki kaynağı döndürüyoruz.
+	return conn, limitedReader, nil
 }
 
 func FetchVideoSizeFromFtp(server model.FtpServer, path string) (int64, error) {
@@ -104,4 +80,23 @@ func FetchVideoSizeFromFtp(server model.FtpServer, path string) (int64, error) {
     }
 
     return size, nil
+}
+
+func EnsureFtpDirectories(conn *ftp.ServerConn, path string) error {
+    parts := strings.Split(path, "/")
+    currentPath := ""
+    
+    for _, part := range parts {
+        if part != "" {
+            currentPath = filepath.Join(currentPath, part)
+            _, err := conn.List(currentPath)
+            if err != nil {
+                err = conn.MakeDir(currentPath)
+                if err != nil {
+                    return fmt.Errorf("Failed to create FTP directory %s: %v", currentPath, err)
+                }
+            }
+        }
+    }
+    return nil
 }

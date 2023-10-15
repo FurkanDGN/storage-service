@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 	"strconv"
-	"bytes"
+	"fmt"
 )
 
-const BUFSIZE = 1024 * 8
+const BUFSIZE = 1024 * 32
 
 type VideoHandler struct {
 	MongoDb *util.MongoDB
@@ -35,59 +35,68 @@ func (v *VideoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       return
   }
 
-	buffer, err := util.FetchVideoFromFtpToBuffer(*ftpServer, "videos/" + video.VideoUrl)
+	videoSize, err := util.FetchVideoSizeFromFtp(*ftpServer, "videos/" + video.VideoUrl)
 	if err != nil {
-		http.Error(w, "Failed to fetch video from FTP server", http.StatusInternalServerError)
-		log.Printf("Failed to fetch video: %v", err)
+		log.Printf("Failed to fetch video size: %v", err)
+		http.Error(w, "Failed to fetch video size", http.StatusInternalServerError)
 		return
 	}
 
-	videoSize := buffer.Len()
-	contentLength := strconv.Itoa(videoSize)
-	contentEnd := strconv.Itoa(videoSize - 1)
+	contentLength := strconv.FormatInt(videoSize, 10)
 
 	if len(r.Header.Get("Range")) == 0 {
-		w.Header().Set("Content-Type", "video/mp4")
-		w.Header().Set("Accept-Ranges", "bytes")
-		w.Header().Set("Content-Length", contentLength)
-		w.Header().Set("Content-Range", "bytes 0-" + contentEnd + "/" + contentLength)
-		w.WriteHeader(200)
+		conn, videoReader, err := util.FetchVideoReaderAndConnFromFtp(*ftpServer, "videos/"+video.VideoUrl)
+    if err != nil {
+        http.Error(w, "Failed to fetch video from FTP server", http.StatusInternalServerError)
+        log.Printf("Failed to fetch video: %v", err)
+        return
+    }
+    defer conn.Quit()
+    defer videoReader.Close()
 
-		videoData := buffer.Bytes()
-		for start := 0; start < len(videoData); {
-			end := start + BUFSIZE
-			if end > len(videoData) {
-				end = len(videoData)
-			}
-			w.Write(videoData[start:end])
-			w.(http.Flusher).Flush()
-			start = end
-		}
+    w.Header().Set("Content-Type", "video/mp4")
+    w.Header().Set("Accept-Ranges", "bytes")
+    w.Header().Set("Content-Length", contentLength)
+    w.WriteHeader(200)
+
+		buf := make([]byte, BUFSIZE)
+    io.CopyBuffer(w, videoReader, buf)
 	} else {
 		rangeParam := strings.Split(r.Header.Get("Range"), "=")[1]
-		splitParams := strings.Split(rangeParam, "-")
+    splitParams := strings.Split(rangeParam, "-")
+    
+    var contentEndValue int64
+		var contentStartValue int64
+		var err error
 
-		contentStartValue, err := strconv.Atoi(splitParams[0])
+		tempValue, err := strconv.Atoi(splitParams[0])
 		if err != nil {
-			contentStartValue = 0
+		    contentStartValue = 0
+		} else {
+		    contentStartValue = int64(tempValue)
 		}
 
-		contentEndValue, err := strconv.Atoi(splitParams[1])
+		tempValue, err = strconv.Atoi(splitParams[1])
 		if err != nil {
-			contentEndValue = videoSize - 1
+		    contentEndValue = videoSize - 1
+		} else {
+		    contentEndValue = int64(tempValue)
 		}
 
-		contentStart := strconv.Itoa(contentStartValue)
-		contentEnd := strconv.Itoa(contentEndValue)
-		contentSize := strconv.Itoa(videoSize)
-		contentLength = strconv.Itoa(contentEndValue - contentStartValue + 1)
+		conn, partialReader, err := util.FetchPartialVideoFromFtpToReader(*ftpServer, "videos/"+video.VideoUrl, contentStartValue, contentEndValue)
+    if err != nil {
+        http.Error(w, "Failed to fetch video from FTP server", http.StatusInternalServerError)
+        log.Printf("Failed to fetch video: %v", err)
+        return
+    }
+    defer conn.Quit()
 
-		w.Header().Set("Content-Type", "video/mp4")
-		w.Header().Set("Accept-Ranges", "bytes")
-		w.Header().Set("Content-Length", contentLength)
-		w.Header().Set("Content-Range", "bytes " + contentStart + "-" + contentEnd + "/" + contentSize)
-		w.WriteHeader(206)
+    w.Header().Set("Content-Type", "video/mp4")
+    w.Header().Set("Accept-Ranges", "bytes")
+    w.Header().Set("Content-Length", strconv.Itoa(int(contentEndValue - contentStartValue + 1)))
+    w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", contentStartValue, contentEndValue, videoSize))
+    w.WriteHeader(206)
 
-		io.CopyN(w, bytes.NewReader(buffer.Bytes()[contentStartValue:]), int64(contentEndValue - contentStartValue + 1))
+    io.Copy(w, partialReader)
 	}
 }
