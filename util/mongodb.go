@@ -8,6 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"time"
+	"path"
 )
 
 
@@ -63,7 +64,7 @@ func (db *MongoDB) GetAllVideos(page int, pageSize int, serverUrl string) ([]mod
 	for cursor.Next(ctx) {
 		var video model.Video
 		cursor.Decode(&video)
-		video.VideoUrl = serverUrl + "/" + config.Config.VideosDir + "/" + video.VideoUrl
+		video.VideoUrl = serverUrl + "/video/" + path.Base(video.VideoUrl)
 		videos = append(videos, video)
 	}
 

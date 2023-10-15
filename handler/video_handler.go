@@ -11,12 +11,11 @@ import (
 	"fmt"
 )
 
-const BUFSIZE = 1024 * 32
+const BUFSIZE = 1024 * 1024
 
 type VideoHandler struct {
 	MongoDb *util.MongoDB
 }
-
 
 func (v *VideoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	videoID := strings.TrimPrefix(r.URL.Path, "/video/")
