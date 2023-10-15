@@ -25,7 +25,6 @@ func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 	initializeConfig()
 	mongoDb := connectToDB()
-	createVideoDirectory()
 	uploadHandler, videosHandler, videoHandler := initializeHandlers(mongoDb)
 	startServer(&port, uploadHandler, videosHandler, videoHandler)
 }
@@ -43,11 +42,6 @@ func connectToDB() *util.MongoDB {
 	}
 	log.Println("Connected to MongoDB")
 	return mongoDB;
-}
-
-func createVideoDirectory() {
-	videosDir := config.Config.VideosDir
-	util.CreateDir(videosDir)
 }
 
 func initializeHandlers(mongoDb *util.MongoDB) (*handler.UploadHandler, *handler.VideosHandler, *handler.VideoHandler) {
@@ -73,11 +67,6 @@ func wrapHandlerWithCORS(handler http.Handler, allowedMethods string) http.Handl
 		enableCors(&w, allowedMethods)
 		handler.ServeHTTP(w, r)
 	}
-}
-
-func serveVideoFiles(w http.ResponseWriter, r *http.Request) {
-	videosDir := config.Config.VideosDir
-	http.StripPrefix("/"+videosDir+"/", http.FileServer(http.Dir("./"+videosDir+"/"))).ServeHTTP(w, r)
 }
 
 func enableCors(w *http.ResponseWriter, allowedMethods string) {
