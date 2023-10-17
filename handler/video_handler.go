@@ -1,17 +1,17 @@
 package handler
 
 import (
-	"videohub/util"
-	"net/http"
-	"log"
-	"io"
-	"path/filepath"
-	"strings"
-	"strconv"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"videohub/util"
 )
 
-const BUFSIZE = 1024 * 1024
+const BUFSIZE = 1024 * 1024 * 5
 
 type VideoHandler struct {
 	MongoDb *util.MongoDB
@@ -19,22 +19,22 @@ type VideoHandler struct {
 
 func (v *VideoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	videoID := strings.TrimPrefix(r.URL.Path, "/video/")
-  videoID = strings.TrimSuffix(videoID, filepath.Ext(videoID))
+	videoID = strings.TrimSuffix(videoID, filepath.Ext(videoID))
 
-  video, err := v.MongoDb.FetchVideoByID(videoID)
-  if err != nil {
-      http.Error(w, "Video not found", http.StatusNotFound)
-      return
-  }
+	video, err := v.MongoDb.FetchVideoByID(videoID)
+	if err != nil {
+		http.Error(w, "Video not found", http.StatusNotFound)
+		return
+	}
 
-  ftpServerID := video.Replicates[0]
-  ftpServer, err := v.MongoDb.FetchFtpServerByID(ftpServerID)
-  if err != nil {
-      http.Error(w, "Internal server error", http.StatusInternalServerError)
-      return
-  }
+	ftpServerID := video.Replicates[0]
+	ftpServer, err := v.MongoDb.FetchFtpServerByID(ftpServerID)
+	if err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 
-	videoSize, err := util.FetchVideoSizeFromFtp(*ftpServer, "videos/" + video.VideoUrl)
+	videoSize, err := util.FetchVideoSizeFromFtp(*ftpServer, "videos/"+video.VideoUrl)
 	if err != nil {
 		log.Printf("Failed to fetch video size: %v", err)
 		http.Error(w, "Failed to fetch video size", http.StatusInternalServerError)
@@ -45,57 +45,57 @@ func (v *VideoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if len(r.Header.Get("Range")) == 0 {
 		conn, videoReader, err := util.FetchVideoReaderAndConnFromFtp(*ftpServer, "videos/"+video.VideoUrl)
-    if err != nil {
-        http.Error(w, "Failed to fetch video from FTP server", http.StatusInternalServerError)
-        log.Printf("Failed to fetch video: %v", err)
-        return
-    }
-    defer conn.Quit()
-    defer videoReader.Close()
+		if err != nil {
+			http.Error(w, "Failed to fetch video from FTP server", http.StatusInternalServerError)
+			log.Printf("Failed to fetch video: %v", err)
+			return
+		}
+		defer videoReader.Close()
+		defer conn.Quit()
 
-    w.Header().Set("Content-Type", "video/mp4")
-    w.Header().Set("Accept-Ranges", "bytes")
-    w.Header().Set("Content-Length", contentLength)
-    w.WriteHeader(200)
+		w.Header().Set("Content-Type", "video/mp4")
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.Header().Set("Content-Length", contentLength)
+		w.WriteHeader(200)
 
 		buf := make([]byte, BUFSIZE)
-    io.CopyBuffer(w, videoReader, buf)
+		io.CopyBuffer(w, videoReader, buf)
 	} else {
 		rangeParam := strings.Split(r.Header.Get("Range"), "=")[1]
-    splitParams := strings.Split(rangeParam, "-")
-    
-    var contentEndValue int64
+		splitParams := strings.Split(rangeParam, "-")
+
+		var contentEndValue int64
 		var contentStartValue int64
 		var err error
 
 		tempValue, err := strconv.Atoi(splitParams[0])
 		if err != nil {
-		    contentStartValue = 0
+			contentStartValue = 0
 		} else {
-		    contentStartValue = int64(tempValue)
+			contentStartValue = int64(tempValue)
 		}
 
 		tempValue, err = strconv.Atoi(splitParams[1])
 		if err != nil {
-		    contentEndValue = videoSize - 1
+			contentEndValue = videoSize - 1
 		} else {
-		    contentEndValue = int64(tempValue)
+			contentEndValue = min(int64(tempValue), videoSize-1)
 		}
 
 		conn, partialReader, err := util.FetchPartialVideoFromFtpToReader(*ftpServer, "videos/"+video.VideoUrl, contentStartValue, contentEndValue)
-    if err != nil {
-        http.Error(w, "Failed to fetch video from FTP server", http.StatusInternalServerError)
-        log.Printf("Failed to fetch video: %v", err)
-        return
-    }
-    defer conn.Quit()
+		if err != nil {
+			http.Error(w, "Failed to fetch video from FTP server", http.StatusInternalServerError)
+			log.Printf("Failed to fetch ranged video: %v", err)
+			return
+		}
+		defer conn.Quit()
 
-    w.Header().Set("Content-Type", "video/mp4")
-    w.Header().Set("Accept-Ranges", "bytes")
-    w.Header().Set("Content-Length", strconv.Itoa(int(contentEndValue - contentStartValue + 1)))
-    w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", contentStartValue, contentEndValue, videoSize))
-    w.WriteHeader(206)
+		w.Header().Set("Content-Type", "video/mp4")
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.Header().Set("Content-Length", strconv.Itoa(int(contentEndValue-contentStartValue+1)))
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", contentStartValue, contentEndValue, videoSize))
+		w.WriteHeader(206)
 
-    io.Copy(w, partialReader)
+		io.Copy(w, partialReader)
 	}
 }

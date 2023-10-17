@@ -1,14 +1,14 @@
 package main
 
 import (
-	"videohub/handler"
-	"videohub/util"
-	"videohub/config"
+	"flag"
 	"log"
 	"net/http"
-	"flag"
 	"os"
 	"strconv"
+	"videohub/config"
+	"videohub/handler"
+	"videohub/util"
 )
 
 func main() {
@@ -41,7 +41,7 @@ func connectToDB() *util.MongoDB {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
 	log.Println("Connected to MongoDB")
-	return mongoDB;
+	return mongoDB
 }
 
 func initializeHandlers(mongoDb *util.MongoDB) (*handler.UploadHandler, *handler.VideosHandler, *handler.VideoHandler) {
@@ -59,7 +59,10 @@ func startServer(port *int, uploadHandler *handler.UploadHandler, videosHandler 
 
 	portStr := strconv.Itoa(*port)
 	log.Println("Server starting at :" + portStr)
-	http.ListenAndServe(":" + portStr, nil)
+	err := http.ListenAndServe(":"+portStr, nil)
+	if err != nil {
+		log.Fatalf("An error occurred when starting server: %s\n", err)
+	}
 }
 
 func wrapHandlerWithCORS(handler http.Handler, allowedMethods string) http.HandlerFunc {
