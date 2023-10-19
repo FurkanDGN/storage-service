@@ -63,13 +63,8 @@ func (u *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	u.UploadToFtpServers(file, targetPath)
 
-	scheme := "http"
-	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
-
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("Upload successful. Video path: %s", scheme + "://" + r.Host + "/" + targetPath)))
+	w.Write([]byte(fmt.Sprintf("Upload successful. Video path: %s", "https://ultrahqporn.com/video/" + id)))
 }
 
 func (u *UploadHandler) UploadToFtpServers(file io.ReadSeeker, ftpPath string) {
