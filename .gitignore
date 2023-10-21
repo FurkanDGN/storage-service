@@ -1,6 +1,10 @@
 # Mac
 .DS_Store
 
+# App files
+app.log
+server_id
+
 # Backup files
 *~*
 

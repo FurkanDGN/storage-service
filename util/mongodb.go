@@ -1,21 +1,20 @@
 package util
 
 import (
-	"videohub/model"
-	"videohub/config"
 	"context"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"time"
 	"path"
+	"time"
+	"videohub/config"
+	"videohub/model"
 )
 
-
 type MongoDB struct {
-	client     *mongo.Client
-	videosCollection *mongo.Collection
-	ftpServersCollection *mongo.Collection
+	client                 *mongo.Client
+	videosCollection       *mongo.Collection
+	videoServersCollection *mongo.Collection
 }
 
 func Connect() (*MongoDB, error) {
@@ -34,19 +33,37 @@ func Connect() (*MongoDB, error) {
 	}
 
 	videosCollection := client.Database(config.Config.MongoDbName).Collection(config.Config.MongoVideosCollection)
-	ftpServersCollection := client.Database(config.Config.MongoDbName).Collection(config.Config.MongoFtpServersCollection)
-	return &MongoDB{client: client, videosCollection: videosCollection, ftpServersCollection: ftpServersCollection}, nil
+	videoServersCollection := client.Database(config.Config.MongoDbName).Collection(config.Config.MongoVideoServersCollection)
+	return &MongoDB{client: client, videosCollection: videosCollection, videoServersCollection: videoServersCollection}, nil
 }
 
 func (db *MongoDB) InsertVideo(video model.Video) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := db.videosCollection.InsertOne(ctx, video)
+	filter := bson.M{"_id": video.ID}
+	update := bson.D{{"$set", video}}
+
+	_, err := db.videosCollection.UpdateOne(ctx, filter, update, options.Update().SetUpsert(true))
 	return err
 }
 
-func (db *MongoDB) GetAllVideos(page int, pageSize int, serverUrl string) ([]model.Video, error) {
+func (db *MongoDB) addStringToReplicatesArray(videoId string, serverId string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	filter := bson.M{"_id": videoId}
+	update := bson.M{"$push": bson.M{"replicates": serverId}}
+
+	_, err := db.videosCollection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (db *MongoDB) GetAllVideosPaged(page int, pageSize int) ([]model.Video, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -64,7 +81,7 @@ func (db *MongoDB) GetAllVideos(page int, pageSize int, serverUrl string) ([]mod
 	for cursor.Next(ctx) {
 		var video model.Video
 		cursor.Decode(&video)
-		video.VideoUrl = serverUrl + "/video/" + path.Base(video.VideoUrl)
+		video.VideoUrl = config.Config.ServerURL + "/video/" + path.Base(video.VideoUrl)
 		videos = append(videos, video)
 	}
 
@@ -75,16 +92,43 @@ func (db *MongoDB) GetAllVideos(page int, pageSize int, serverUrl string) ([]mod
 	return videos, nil
 }
 
-func (db *MongoDB) FetchAllFtpServers() ([]model.FtpServer, error) {
-	var servers []model.FtpServer
-	cursor, err := db.ftpServersCollection.Find(context.TODO(), bson.M{})
+func (db *MongoDB) GetAllVideos() ([]model.Video, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	opts := options.Find()
+
+	cursor, err := db.videosCollection.Find(ctx, bson.M{}, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var videos []model.Video
+	for cursor.Next(ctx) {
+		var video model.Video
+		cursor.Decode(&video)
+		video.VideoUrl = config.Config.ServerURL + "/video/" + path.Base(video.VideoUrl)
+		videos = append(videos, video)
+	}
+
+	if err := cursor.Err(); err != nil {
+		return nil, err
+	}
+
+	return videos, nil
+}
+
+func (db *MongoDB) FetchAllVideoServers() ([]model.VideoServer, error) {
+	var servers []model.VideoServer
+	cursor, err := db.videoServersCollection.Find(context.TODO(), bson.M{})
 	if err != nil {
 		return nil, err
 	}
 	defer cursor.Close(context.TODO())
 
 	for cursor.Next(context.TODO()) {
-		var server model.FtpServer
+		var server model.VideoServer
 		err := cursor.Decode(&server)
 		if err != nil {
 			return nil, err
@@ -101,13 +145,4 @@ func (db *MongoDB) FetchVideoByID(videoID string) (*model.Video, error) {
 		return nil, err
 	}
 	return &video, nil
-}
-
-func (db *MongoDB) FetchFtpServerByID(serverID string) (*model.FtpServer, error) {
-    var server model.FtpServer
-    err := db.ftpServersCollection.FindOne(context.TODO(), bson.M{"_id": serverID}).Decode(&server)
-    if err != nil {
-        return nil, err
-    }
-    return &server, nil
 }

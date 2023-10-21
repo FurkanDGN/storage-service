@@ -1,15 +1,18 @@
 package handler
 
 import (
-	"videohub/util"
-	"videohub/model"
-	"videohub/config"
-	"path/filepath"
-	"io"
+	"errors"
 	"fmt"
-	"net/http"
+	"io"
 	"log"
+	"mime/multipart"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"videohub/config"
+	"videohub/model"
+	"videohub/util"
 )
 
 type UploadHandler struct {
@@ -17,6 +20,11 @@ type UploadHandler struct {
 }
 
 func (u *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		http.Error(w, "Unable to parse form", http.StatusBadRequest)
+		return
+	}
+
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		http.Error(w, "Unable to read uploaded file", http.StatusBadRequest)
@@ -24,75 +32,63 @@ func (u *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	id := r.FormValue("id")
-	title := r.FormValue("title")
-
-	if title == "" {
-		http.Error(w, "Title cannot be null", http.StatusBadRequest)
+	id, title, err := validateForm(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	fileExtension := strings.TrimPrefix(filepath.Ext(header.Filename), ".")
-	targetPath := fmt.Sprintf("%s/%s/%s%s", config.Config.VideosDir, fileExtension, id, filepath.Ext(header.Filename))
-
-	ftpServers, err := u.MongoDb.FetchAllFtpServers()
+	targetPath, err := saveFileToDisk(file, header, id)
 	if err != nil {
-		log.Printf("Failed to fetch FTP servers: %v", err)
+		log.Printf("An error occurred when saving file to disk: %v\n", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	var replicates []string
-	for _, server := range ftpServers {
-		replicates = append(replicates, server.ID)
-	}
-
-	video := model.Video{
-		ID:        id,
-		Title:     title,
-		VideoUrl:  fmt.Sprintf("%s/%s.%s", fileExtension, id, fileExtension),
-		Replicates: replicates,
-	}
-
-	err = u.MongoDb.InsertVideo(video)
-	if err != nil {
-		log.Printf("Failed to insert video to MongoDB: %v", err)
+	video := prepareVideoModel(id, title, targetPath, []string{})
+	if err = u.MongoDb.InsertVideo(video); err != nil {
+		log.Printf("An error occurred when saving file to mongoDB: %v\n", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-
-	u.UploadToFtpServers(file, targetPath)
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("Upload successful. Video path: %s", "https://ultrahqporn.com/video/" + id)))
+	w.Write([]byte(fmt.Sprintf("Upload successful. Video path: %s%s", config.Config.ServerURL, "/video/"+id)))
 }
 
-func (u *UploadHandler) UploadToFtpServers(file io.ReadSeeker, ftpPath string) {
-	ftpServers, err := u.MongoDb.FetchAllFtpServers()
-	if err != nil {
-		log.Printf("Failed to fetch FTP servers: %v", err)
-		return
+func validateForm(r *http.Request) (id string, title string, err error) {
+	id = r.FormValue("id")
+	title = r.FormValue("title")
+	if id == "" || title == "" {
+		err = errors.New("id or title cannot be null")
 	}
 
-	for _, server := range ftpServers {
-		conn, err := util.ConnectToFtp(server)
-		if err != nil {
-			log.Printf("Failed to connect to FTP server %s: %v", server.Address, err)
-			continue
-		}
-		defer conn.Quit()
+	return
+}
 
-    directory := filepath.Dir(ftpPath)
-    err = util.EnsureFtpDirectories(conn, directory)
-    if err != nil {
-        log.Printf("Failed to create FTP directory %s on server %s: %v", directory, server.Address, err)
-        continue
-    }
+func saveFileToDisk(file multipart.File, header *multipart.FileHeader, id string) (targetPath string, err error) {
+	fileExtension := strings.TrimPrefix(filepath.Ext(header.Filename), ".")
+	targetPath = fmt.Sprintf("%s/%s", fileExtension, id)
+	filePath := fmt.Sprintf("%s/%s", config.Config.VideosDir, targetPath)
+	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+		return "", err
+	}
+	dst, err := os.Create(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer dst.Close()
+	if _, err = io.Copy(dst, file); err != nil {
+		return "", err
+	}
+	return targetPath, nil
+}
 
-		file.Seek(0, 0)
-		err = conn.Stor(ftpPath, file)
-		if err != nil {
-			log.Printf("Failed to upload file to FTP server %s: %v", server.Address, err)
-		}
+func prepareVideoModel(id, title, targetPath string, replicates []string) model.Video {
+	return model.Video{
+		ID:         id,
+		Title:      title,
+		VideoUrl:   targetPath,
+		Replicates: replicates,
 	}
 }

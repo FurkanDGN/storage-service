@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"videohub/util"
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"videohub/util"
 )
 
 type VideosHandler struct {
@@ -20,12 +20,7 @@ func (vh *VideosHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scheme := "http"
-	if r.TLS != nil {
-		 scheme = "https"
-	}
-
-	videos, err := vh.MongoDb.GetAllVideos(page, pageSize, scheme + "://" + r.Host)
+	videos, err := vh.MongoDb.GetAllVideosPaged(page, pageSize)
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return

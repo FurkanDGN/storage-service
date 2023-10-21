@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -14,7 +15,6 @@ import (
 func main() {
 	var port int
 	flag.IntVar(&port, "port", 0, "Port number")
-
 	flag.Parse()
 
 	if port == 0 {
@@ -22,7 +22,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
+	logFile, err := os.OpenFile("app.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("error opening file: %v", err)
+	}
+	defer logFile.Close()
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+	log.SetOutput(multiWriter)
+	log.Println("----------")
+	log.Println("Service starting...")
+
 	initializeConfig()
 	mongoDb := connectToDB()
 	uploadHandler, videosHandler, videoHandler := initializeHandlers(mongoDb)
@@ -30,7 +40,11 @@ func main() {
 }
 
 func initializeConfig() {
-	config.LoadConfig()
+	_, err := config.LoadConfig()
+	if err != nil {
+		panic(err)
+	}
+
 	log.Println("Config loaded")
 }
 
