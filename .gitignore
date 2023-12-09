@@ -17,6 +17,7 @@ server_id
 _obj
 _test
 videos/
+test/
 
 # Editor files
 .idea/
