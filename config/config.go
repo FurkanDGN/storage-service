@@ -42,8 +42,8 @@ func LoadConfig() (*AppConfig, error) {
 		mongoVideosCollection, _ := os.LookupEnv("VIDEOHUB_MONGO_VIDEOS_COLLECTION")
 		mongoVideoServersCollection, _ := os.LookupEnv("VIDEOHUB_MONGO_VIDEO_SERVERS_COLLECTION")
 		videosDir, _ := os.LookupEnv("VIDEOHUB_VIDEOS_DIRNAME")
-		serverUrl, _ := os.LookupEnv("SERVER_URL")
-		cacheRetentionTimeStr, _ := os.LookupEnv("CACHE_RETENTION_TIME")
+		serverUrl, _ := os.LookupEnv("VIDEOHUB_SERVER_URL")
+		cacheRetentionTimeStr, _ := os.LookupEnv("VIDEOHUB_CACHE_RETENTION_TIME")
 		cacheRetentionTimeInt, err := strconv.Atoi(cacheRetentionTimeStr)
 		cacheRetentionDuration := time.Hour * time.Duration(cacheRetentionTimeInt)
 
