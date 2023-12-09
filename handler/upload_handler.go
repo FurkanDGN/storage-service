@@ -13,10 +13,17 @@ import (
 	"videohub/config"
 	"videohub/model"
 	"videohub/util"
+	"github.com/google/uuid"
+	"encoding/json"
 )
 
 type UploadHandler struct {
 	MongoDb *util.MongoDB
+}
+
+type Response struct {
+		Success    bool `json:"success"`
+		VideoPath  string `json:"videoPath"`
 }
 
 func (u *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -32,11 +39,12 @@ func (u *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	id, title, err := validateForm(r)
+	title, err := validateForm(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	id := uuid.New().String()
 
 	targetPath, err := saveFileToDisk(file, header, id)
 	if err != nil {
@@ -52,15 +60,26 @@ func (u *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	response := Response{
+		Success:   true,
+		VideoPath: fmt.Sprintf("%s%s", config.Config.ServerURL, "/video/"+id),
+	}
+
+	jsonResponse, err := json.Marshal(response)
+	if err != nil {
+		log.Println("Error:", err)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("Upload successful. Video path: %s%s", config.Config.ServerURL, "/video/"+id)))
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonResponse)
 }
 
-func validateForm(r *http.Request) (id string, title string, err error) {
-	id = r.FormValue("id")
+func validateForm(r *http.Request) (title string, err error) {
 	title = r.FormValue("title")
-	if id == "" || title == "" {
-		err = errors.New("id or title cannot be null")
+	if title == "" {
+		err = errors.New("title cannot be null")
 	}
 
 	return

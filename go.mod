@@ -4,7 +4,7 @@ go 1.21.0
 
 require (
 	github.com/go-zookeeper/zk v1.0.3
-	github.com/google/uuid v1.3.1
+	github.com/google/uuid v1.4.0
 	go.mongodb.org/mongo-driver v1.9.1
 )
 
