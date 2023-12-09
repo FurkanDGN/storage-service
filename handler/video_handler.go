@@ -12,18 +12,26 @@ import (
 	"videohub/util"
 )
 
-const BufferSize = 1024 * 1024 * 2
+const BufferSize = 1024 * 1024 * 5
 
 type VideoHandler struct {
 	MongoDb *util.MongoDB
+	Cache   *util.Cache
 }
 
 func (v *VideoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	videoID := getVideoID(r)
-	video, err := v.MongoDb.FetchVideoByID(videoID)
-	if err != nil {
-		http.Error(w, "Video not found", http.StatusNotFound)
-		return
+	video, exists := v.Cache.Get(videoID);
+
+	if !exists {
+		var err error
+    video, err = v.MongoDb.FetchVideoByID(videoID)
+		if err != nil {
+			http.Error(w, "Video not found", http.StatusNotFound)
+			return
+		} else {
+			v.Cache.Set(videoID, video)
+		}
 	}
 
 	targetPath := fmt.Sprintf("%s/%s", config.Config.VideosDir, video.VideoUrl)

@@ -61,7 +61,7 @@ func connectToDB() *util.MongoDB {
 func initializeHandlers(mongoDb *util.MongoDB) (*handler.UploadHandler, *handler.VideosHandler, *handler.VideoHandler) {
 	uploadHandler := &handler.UploadHandler{MongoDb: mongoDb}
 	videosHandler := &handler.VideosHandler{MongoDb: mongoDb}
-	videoHandler := &handler.VideoHandler{MongoDb: mongoDb}
+	videoHandler := &handler.VideoHandler{MongoDb: mongoDb, Cache: util.NewCache()}
 	return uploadHandler, videosHandler, videoHandler
 }
 

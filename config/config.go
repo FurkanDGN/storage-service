@@ -5,6 +5,9 @@ import (
 	"github.com/google/uuid"
 	"os"
 	"sync"
+	"time"
+	"log"
+	"strconv"
 )
 
 const serverIdFilename = "server_id"
@@ -23,6 +26,7 @@ type AppConfig struct {
 	VideosDir                   string
 	ServerURL                   string
 	ServerId                    string
+	CacheRetentionTime          time.Duration
 }
 
 var Config *AppConfig
@@ -39,9 +43,16 @@ func LoadConfig() (*AppConfig, error) {
 		mongoVideoServersCollection, _ := os.LookupEnv("VIDEOHUB_MONGO_VIDEO_SERVERS_COLLECTION")
 		videosDir, _ := os.LookupEnv("VIDEOHUB_VIDEOS_DIRNAME")
 		serverUrl, _ := os.LookupEnv("SERVER_URL")
+		cacheRetentionTimeStr, _ := os.LookupEnv("CACHE_RETENTION_TIME")
+		cacheRetentionTimeInt, err := strconv.Atoi(cacheRetentionTimeStr)
+		cacheRetentionDuration := time.Hour * time.Duration(cacheRetentionTimeInt)
+
+		if err != nil {
+    	log.Fatal(err)
+		}
 
 		if mongoUrl == "" || mongoDatabaseName == "" || mongoVideosCollection == "" || mongoVideoServersCollection == "" ||
-			videosDir == "" || serverUrl == "" {
+			videosDir == "" || serverUrl == "" || cacheRetentionDuration == 0 {
 			err = errors.New("missing environment variables")
 			return
 		}
@@ -54,6 +65,7 @@ func LoadConfig() (*AppConfig, error) {
 			VideosDir:                   videosDir,
 			ServerURL:                   serverUrl,
 			ServerId:                    serverId,
+			CacheRetentionTime:          cacheRetentionDuration,
 		}
 	})
 
