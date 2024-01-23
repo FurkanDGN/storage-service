@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"log"
 	"mime/multipart"
@@ -13,8 +15,6 @@ import (
 	"videohub/config"
 	"videohub/model"
 	"videohub/util"
-	"github.com/google/uuid"
-	"encoding/json"
 )
 
 type UploadHandler struct {
@@ -22,8 +22,8 @@ type UploadHandler struct {
 }
 
 type Response struct {
-		Success    bool `json:"success"`
-		VideoPath  string `json:"videoPath"`
+	Success   bool   `json:"success"`
+	VideoPath string `json:"videoPath"`
 }
 
 func (u *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -71,8 +71,8 @@ func (u *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	w.Write(jsonResponse)
 }
 

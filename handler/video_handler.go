@@ -21,11 +21,11 @@ type VideoHandler struct {
 
 func (v *VideoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	videoID := getVideoID(r)
-	video, exists := v.Cache.Get(videoID);
+	video, exists := v.Cache.Get(videoID)
 
 	if !exists {
 		var err error
-    video, err = v.MongoDb.FetchVideoByID(videoID)
+		video, err = v.MongoDb.FetchVideoByID(videoID)
 		if err != nil {
 			http.Error(w, "Video not found", http.StatusNotFound)
 			return

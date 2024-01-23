@@ -3,11 +3,11 @@ package config
 import (
 	"errors"
 	"github.com/google/uuid"
+	"log"
 	"os"
+	"strconv"
 	"sync"
 	"time"
-	"log"
-	"strconv"
 )
 
 const serverIdFilename = "server_id"
@@ -27,6 +27,9 @@ type AppConfig struct {
 	ServerURL                   string
 	ServerId                    string
 	CacheRetentionTime          time.Duration
+	SecureEnabled               bool
+	CertFile                    string
+	KeyFile                     string
 }
 
 var Config *AppConfig
@@ -46,9 +49,12 @@ func LoadConfig() (*AppConfig, error) {
 		cacheRetentionTimeStr, _ := os.LookupEnv("VIDEOHUB_CACHE_RETENTION_TIME")
 		cacheRetentionTimeInt, err := strconv.Atoi(cacheRetentionTimeStr)
 		cacheRetentionDuration := time.Hour * time.Duration(cacheRetentionTimeInt)
+		secureEnabled, _ := strconv.ParseBool(os.Getenv("VIDEOHUB_SECURE_ENABLED"))
+		certFile, _ := os.LookupEnv("VIDEOHUB_CERT_FILE")
+		keyFile, _ := os.LookupEnv("VIDEOHUB_KEY_FILE")
 
 		if err != nil {
-    	log.Fatal(err)
+			log.Fatal(err)
 		}
 
 		if mongoUrl == "" || mongoDatabaseName == "" || mongoVideosCollection == "" || mongoVideoServersCollection == "" ||
@@ -66,6 +72,9 @@ func LoadConfig() (*AppConfig, error) {
 			ServerURL:                   serverUrl,
 			ServerId:                    serverId,
 			CacheRetentionTime:          cacheRetentionDuration,
+			SecureEnabled:               secureEnabled,
+			CertFile:                    certFile,
+			KeyFile:                     keyFile,
 		}
 	})
 
