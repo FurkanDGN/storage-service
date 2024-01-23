@@ -73,10 +73,18 @@ func startServer(port *int, uploadHandler *handler.UploadHandler, videosHandler 
 
 	portStr := strconv.Itoa(*port)
 	log.Println("Server starting at :" + portStr)
-	err := http.ListenAndServe(":"+portStr, nil)
-	if err != nil {
-		log.Fatalf("An error occurred when starting server: %s\n", err)
+	if config.Config.SecureEnabled {
+		err := http.ListenAndServeTLS(":"+portStr, config.Config.CertFile, config.Config.KeyFile, nil)
+		if err != nil {
+			log.Fatalf("An error occurred when starting server: %s\n", err)
+		}
+	} else {
+		err := http.ListenAndServe(":"+portStr, nil)
+		if err != nil {
+			log.Fatalf("An error occurred when starting server: %s\n", err)
+		}
 	}
+
 }
 
 func wrapHandlerWithCORS(handler http.Handler, allowedMethods string) http.HandlerFunc {
